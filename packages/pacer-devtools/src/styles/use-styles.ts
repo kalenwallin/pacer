@@ -1,13 +1,14 @@
 import * as goober from 'goober'
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
 import { useTheme } from '@tanstack/devtools-ui'
 import { tokens } from './tokens'
 
-const stylesFactory = (theme: 'light' | 'dark') => {
+const stylesFactory = (theme: 'light' | 'dark', containerHeight?: number) => {
   const { colors, font, size, alpha, border } = tokens
   const { fontFamily, size: fontSize } = font
   const css = goober.css
   const t = (light: string, dark: string) => (theme === 'light' ? light : dark)
+  const heightValue = containerHeight ? `${containerHeight - 66}px` : '100%'
 
   return {
     mainContainer: css`
@@ -64,6 +65,8 @@ const stylesFactory = (theme: 'light' | 'dark') => {
       border: 1px solid ${t(colors.gray[200], colors.darkGray[700])};
       display: flex;
       flex-direction: column;
+      height: ${heightValue};
+      overflow-y: auto;
       overflow: hidden;
       min-height: 0;
       flex-shrink: 0;
@@ -74,6 +77,8 @@ const stylesFactory = (theme: 'light' | 'dark') => {
       border: 1px solid ${t(colors.gray[200], colors.darkGray[700])};
       display: flex;
       flex-direction: column;
+      height: ${heightValue};
+      overflow-y: auto;
       overflow: hidden;
       min-height: 0;
       flex: 1;
@@ -356,9 +361,37 @@ const stylesFactory = (theme: 'light' | 'dark') => {
 
 export function useStyles() {
   const { theme } = useTheme()
-  const [styles, setStyles] = createSignal(stylesFactory(theme()))
+  const [containerHeight, setContainerHeight] = createSignal<number | undefined>(undefined)
+
+  // Measure the #tanstack_devtools element and update height on resize
+  onMount(() => {
+    const update = () => {
+      const el = document.getElementById('tanstack_devtools')
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        setContainerHeight(Math.round(rect.height))
+      }
+    }
+
+    update()
+
+    const el = document.getElementById('tanstack_devtools')
+    const ro = new ResizeObserver(() => {
+      update()
+    })
+    if (el) ro.observe(el)
+
+    window.addEventListener('resize', update)
+
+    onCleanup(() => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+    })
+  })
+
+  const [styles, setStyles] = createSignal(stylesFactory(theme(), containerHeight()))
   createEffect(() => {
-    setStyles(stylesFactory(theme()))
+    setStyles(stylesFactory(theme(), containerHeight()))
   })
   return styles
 }
