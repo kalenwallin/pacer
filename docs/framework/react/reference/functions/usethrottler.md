@@ -8,10 +8,13 @@ title: useThrottler
 # Function: useThrottler()
 
 ```ts
-function useThrottler<TFn, TArgs>(fn, options): object
+function useThrottler<TFn, TSelected>(
+   fn, 
+   options, 
+selector): ReactThrottler<TFn, TSelected>
 ```
 
-Defined in: [react-pacer/src/throttler/useThrottler.ts:45](https://github.com/TanStack/bouncer/blob/main/packages/react-pacer/src/throttler/useThrottler.ts#L45)
+Defined in: [react-pacer/src/throttler/useThrottler.ts:107](https://github.com/TanStack/pacer/blob/main/packages/react-pacer/src/throttler/useThrottler.ts#L107)
 
 A low-level React hook that creates a `Throttler` instance that limits how often the provided function can execute.
 
@@ -23,16 +26,30 @@ Throttling ensures a function executes at most once within a specified time wind
 regardless of how many times it is called. This is useful for rate-limiting
 expensive operations or UI updates.
 
-The hook returns an object containing:
-- maybeExecute: The throttled function that respects the configured wait time
-- cancel: A function to cancel any pending trailing execution
-- getExecutionCount: A function that returns the number of times the throttled function has executed
+## State Management and Selector
+
+The hook uses TanStack Store for reactive state management. The `selector` parameter allows you
+to specify which state changes will trigger a re-render, optimizing performance by preventing
+unnecessary re-renders when irrelevant state changes occur.
+
+**By default, there will be no reactive state subscriptions** and you must opt-in to state
+tracking by providing a selector function. This prevents unnecessary re-renders and gives you
+full control over when your component updates. Only when you provide a selector will the
+component re-render when the selected state values change.
+
+Available state properties:
+- `executionCount`: Number of function executions that have been completed
+- `lastArgs`: The arguments from the most recent call to maybeExecute
+- `lastExecutionTime`: Timestamp of the last function execution in milliseconds
+- `nextExecutionTime`: Timestamp when the next execution can occur in milliseconds
+- `isPending`: Whether the throttler is waiting for the timeout to trigger execution
+- `status`: Current execution status ('disabled' | 'idle' | 'pending')
 
 ## Type Parameters
 
-• **TFn** *extends* (...`args`) => `any`
+• **TFn** *extends* `AnyFunction`
 
-• **TArgs** *extends* `any`[]
+• **TSelected** = \{\}
 
 ## Parameters
 
@@ -42,96 +59,55 @@ The hook returns an object containing:
 
 ### options
 
-`ThrottlerOptions`
+`ThrottlerOptions`\<`TFn`\>
+
+### selector
+
+(`state`) => `TSelected`
 
 ## Returns
 
-`object`
-
-### cancel()
-
-```ts
-readonly cancel: () => void;
-```
-
-Cancels any pending trailing execution and clears internal state.
-
-If a trailing execution is scheduled (due to throttling with trailing=true),
-this will prevent that execution from occurring. The internal timeout and
-stored arguments will be cleared.
-
-Has no effect if there is no pending execution.
-
-#### Returns
-
-`void`
-
-### getExecutionCount()
-
-```ts
-readonly getExecutionCount: () => number;
-```
-
-Returns the number of times the function has been executed
-
-#### Returns
-
-`number`
-
-### maybeExecute()
-
-```ts
-readonly maybeExecute: (...args) => void;
-```
-
-Attempts to execute the throttled function. The execution behavior depends on the throttler options:
-
-- If enough time has passed since the last execution (>= wait period):
-  - With leading=true: Executes immediately
-  - With leading=false: Waits for the next trailing execution
-
-- If within the wait period:
-  - With trailing=true: Schedules execution for end of wait period
-  - With trailing=false: Drops the execution
-
-#### Parameters
-
-##### args
-
-...`TArgs`
-
-#### Returns
-
-`void`
-
-#### Example
-
-```ts
-const throttled = new Throttler(fn, { wait: 1000 });
-
-// First call executes immediately
-throttled.maybeExecute('a', 'b');
-
-// Call during wait period - gets throttled
-throttled.maybeExecute('c', 'd');
-```
+[`ReactThrottler`](../../interfaces/reactthrottler.md)\<`TFn`, `TSelected`\>
 
 ## Example
 
 ```tsx
-// Basic throttling with custom state
+// Default behavior - no reactive state subscriptions
 const [value, setValue] = useState(0);
-const { maybeExecute } = useThrottler(setValue, { wait: 1000 });
+const throttler = useThrottler(setValue, { wait: 1000 });
 
-// With Redux
-const dispatch = useDispatch();
-const { maybeExecute } = useThrottler(
-  (value) => dispatch(updateAction(value)),
-  { wait: 1000 }
+// Opt-in to re-render when execution count changes (optimized for tracking executions)
+const [value, setValue] = useState(0);
+const throttler = useThrottler(
+  setValue,
+  { wait: 1000 },
+  (state) => ({ executionCount: state.executionCount })
+);
+
+// Opt-in to re-render when throttling state changes (optimized for loading indicators)
+const [value, setValue] = useState(0);
+const throttler = useThrottler(
+  setValue,
+  { wait: 1000 },
+  (state) => ({
+    isPending: state.isPending,
+    status: state.status
+  })
+);
+
+// Opt-in to re-render when timing information changes (optimized for timing displays)
+const [value, setValue] = useState(0);
+const throttler = useThrottler(
+  setValue,
+  { wait: 1000 },
+  (state) => ({
+    lastExecutionTime: state.lastExecutionTime,
+    nextExecutionTime: state.nextExecutionTime
+  })
 );
 
 // With any state manager
-const { maybeExecute, cancel } = useThrottler(
+const throttler = useThrottler(
   (value) => stateManager.setState(value),
   {
     wait: 2000,
@@ -139,4 +115,7 @@ const { maybeExecute, cancel } = useThrottler(
     trailing: false  // Skip trailing edge updates
   }
 );
+
+// Access the selected state (will be empty object {} unless selector provided)
+const { executionCount, isPending } = throttler.state;
 ```

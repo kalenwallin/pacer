@@ -8,18 +8,21 @@ title: useQueuer
 # Function: useQueuer()
 
 ```ts
-function useQueuer<TValue>(options): object
+function useQueuer<TValue, TSelected>(
+   fn, 
+   options, 
+selector): ReactQueuer<TValue, TSelected>
 ```
 
-Defined in: [react-pacer/src/queuer/useQueuer.ts:43](https://github.com/TanStack/bouncer/blob/main/packages/react-pacer/src/queuer/useQueuer.ts#L43)
+Defined in: [react-pacer/src/queuer/useQueuer.ts:132](https://github.com/TanStack/pacer/blob/main/packages/react-pacer/src/queuer/useQueuer.ts#L132)
 
 A React hook that creates and manages a Queuer instance.
 
 This is a lower-level hook that provides direct access to the Queuer's functionality without
 any built-in state management. This allows you to integrate it with any state management solution
-you prefer (useState, Redux, Zustand, etc.) by utilizing the onUpdate callback.
+you prefer (useState, Redux, Zustand, etc.) by utilizing the onItemsChange callback.
 
-For a hook with built-in state management, see useQueuerState.
+For a hook with built-in state management, see useQueuedState.
 
 The Queuer extends the base Queue to add processing capabilities. Items are processed
 synchronously in order, with optional delays between processing each item. The queuer includes
@@ -29,270 +32,110 @@ When started, it will process one item per tick, with an optional wait time betw
 By default uses FIFO (First In First Out) behavior, but can be configured for LIFO
 (Last In First Out) by specifying 'front' position when adding items.
 
+## State Management and Selector
+
+The hook uses TanStack Store for reactive state management. The `selector` parameter allows you
+to specify which state changes will trigger a re-render, optimizing performance by preventing
+unnecessary re-renders when irrelevant state changes occur.
+
+**By default, there will be no reactive state subscriptions** and you must opt-in to state
+tracking by providing a selector function. This prevents unnecessary re-renders and gives you
+full control over when your component updates. Only when you provide a selector will the
+component re-render when the selected state values change.
+
+Available state properties:
+- `executionCount`: Number of items that have been processed by the queuer
+- `expirationCount`: Number of items that have been removed due to expiration
+- `isEmpty`: Whether the queuer has no items to process
+- `isFull`: Whether the queuer has reached its maximum capacity
+- `isIdle`: Whether the queuer is not currently processing any items
+- `isRunning`: Whether the queuer is active and will process items automatically
+- `items`: Array of items currently waiting to be processed
+- `itemTimestamps`: Timestamps when items were added for expiration tracking
+- `pendingTick`: Whether the queuer has a pending timeout for processing the next item
+- `rejectionCount`: Number of items that have been rejected from being added
+- `size`: Number of items currently in the queue
+- `status`: Current processing status ('idle' | 'running' | 'stopped')
+
 ## Type Parameters
 
 • **TValue**
 
+• **TSelected** = \{\}
+
 ## Parameters
 
-### options
-
-`QueuerOptions`\<`TValue`\>
-
-## Returns
-
-`object`
-
-### addItem()
-
-```ts
-addItem: (item, position?) => boolean;
-```
-
-Adds an item to the queue and starts processing if not already running
-
-#### Parameters
-
-##### item
-
-`TValue`
-
-##### position?
-
-`"front"` | `"back"`
-
-#### Returns
-
-`boolean`
-
-true if item was added, false if queue is full
-
-### clear()
-
-```ts
-clear: () => void;
-```
-
-Removes all items from the queue
-
-#### Returns
-
-`void`
-
-### getAllItems()
-
-```ts
-getAllItems: () => TValue[];
-```
-
-Returns a copy of all items in the queue
-
-#### Returns
-
-`TValue`[]
-
-### getExecutionCount()
-
-```ts
-getExecutionCount: () => number;
-```
-
-Returns the number of items that have been removed from the queue
-
-#### Returns
-
-`number`
-
-### getNextItem()
-
-```ts
-getNextItem: (position?) => undefined | TValue;
-```
-
-Removes and returns an item from the queue using shift (default) or pop
-
-#### Parameters
-
-##### position?
-
-`QueuePosition`
-
-#### Returns
-
-`undefined` \| `TValue`
-
-#### Example
-
-```ts
-// Standard FIFO queue
-queue.getNextItem()
-// Stack-like behavior (LIFO)
-queue.getNextItem('back')
-```
-
-### isEmpty()
-
-```ts
-isEmpty: () => boolean;
-```
-
-Returns true if the queue is empty
-
-#### Returns
-
-`boolean`
-
-### isFull()
-
-```ts
-isFull: () => boolean;
-```
-
-Returns true if the queue is full
-
-#### Returns
-
-`boolean`
-
-### isIdle()
-
-```ts
-isIdle: () => boolean;
-```
-
-Returns true if the queuer is running but has no items to process
-
-#### Returns
-
-`boolean`
-
-### isRunning()
-
-```ts
-isRunning: () => boolean;
-```
-
-Returns true if the queuer is running
-
-#### Returns
-
-`boolean`
-
-### onUpdate()
-
-```ts
-onUpdate: (cb) => () => void;
-```
-
-Adds a callback to be called when an item is processed
-
-#### Parameters
-
-##### cb
+### fn
 
 (`item`) => `void`
 
-#### Returns
+### options
 
-`Function`
+`QueuerOptions`\<`TValue`\> = `{}`
 
-##### Returns
+### selector
 
-`void`
+(`state`) => `TSelected`
 
-### peek()
+## Returns
 
-```ts
-peek: (position?) => undefined | TValue;
-```
-
-Returns an item without removing it
-
-#### Parameters
-
-##### position?
-
-`QueuePosition`
-
-#### Returns
-
-`undefined` \| `TValue`
-
-#### Example
-
-```ts
-// Look at next item to getNextItem
-queue.peek()
-// Look at last item (like stack top)
-queue.peek('back')
-```
-
-### reset()
-
-```ts
-reset: (withInitialItems?) => void;
-```
-
-Resets the queue to its initial state
-
-#### Parameters
-
-##### withInitialItems?
-
-`boolean`
-
-#### Returns
-
-`void`
-
-### size()
-
-```ts
-size: () => number;
-```
-
-Returns the current size of the queue
-
-#### Returns
-
-`number`
-
-### start()
-
-```ts
-start: () => void;
-```
-
-Starts the queuer and processes items
-
-#### Returns
-
-`void`
-
-### stop()
-
-```ts
-stop: () => void;
-```
-
-Stops the queuer from processing items
-
-#### Returns
-
-`void`
+[`ReactQueuer`](../../interfaces/reactqueuer.md)\<`TValue`, `TSelected`\>
 
 ## Example
 
 ```tsx
+// Default behavior - no reactive state subscriptions
+const queue = useQueuer(
+  (item) => console.log('Processing:', item),
+  { started: true, wait: 1000 }
+);
+
+// Opt-in to re-render when queue size changes (optimized for displaying queue length)
+const queue = useQueuer(
+  (item) => console.log('Processing:', item),
+  { started: true, wait: 1000 },
+  (state) => ({
+    size: state.size,
+    isEmpty: state.isEmpty,
+    isFull: state.isFull
+  })
+);
+
+// Opt-in to re-render when processing state changes (optimized for loading indicators)
+const queue = useQueuer(
+  (item) => console.log('Processing:', item),
+  { started: true, wait: 1000 },
+  (state) => ({
+    isRunning: state.isRunning,
+    isIdle: state.isIdle,
+    status: state.status,
+    pendingTick: state.pendingTick
+  })
+);
+
+// Opt-in to re-render when execution metrics change (optimized for stats display)
+const queue = useQueuer(
+  (item) => console.log('Processing:', item),
+  { started: true, wait: 1000 },
+  (state) => ({
+    executionCount: state.executionCount,
+    expirationCount: state.expirationCount,
+    rejectionCount: state.rejectionCount
+  })
+);
+
 // Example with custom state management and scheduling
 const [items, setItems] = useState([]);
 
-const queue = useQueuer({
-  started: true, // Start processing immediately
-  wait: 1000,    // Process one item every second
-  onUpdate: (queue) => setItems(queue.getAllItems()),
-  getPriority: (item) => item.priority // Process higher priority items first
-});
+const queue = useQueuer(
+  (item) => console.log('Processing:', item),
+  {
+    started: true, // Start processing immediately
+    wait: 1000,    // Process one item every second
+    onItemsChange: (queue) => setItems(queue.peekAllItems()),
+    getPriority: (item) => item.priority // Process higher priority items first
+  }
+);
 
 // Add items to process - they'll be handled automatically
 queue.addItem('task1');
@@ -301,4 +144,7 @@ queue.addItem('task2');
 // Control the scheduler
 queue.stop();  // Pause processing
 queue.start(); // Resume processing
+
+// Access the selected state (will be empty object {} unless selector provided)
+const { size, isRunning, executionCount } = queue.state;
 ```

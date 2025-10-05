@@ -8,10 +8,13 @@ title: useDebouncedState
 # Function: useDebouncedState()
 
 ```ts
-function useDebouncedState<TValue>(value, options): readonly [TValue, (...args) => void, Debouncer<Dispatch<SetStateAction<TValue>>, [SetStateAction<TValue>]>]
+function useDebouncedState<TValue, TSelected>(
+   value, 
+   options, 
+   selector?): [TValue, Dispatch<SetStateAction<TValue>>, ReactDebouncer<Dispatch<SetStateAction<TValue>>, TSelected>]
 ```
 
-Defined in: [react-pacer/src/debouncer/useDebouncedState.ts:35](https://github.com/TanStack/bouncer/blob/main/packages/react-pacer/src/debouncer/useDebouncedState.ts#L35)
+Defined in: [react-pacer/src/debouncer/useDebouncedState.ts:81](https://github.com/TanStack/pacer/blob/main/packages/react-pacer/src/debouncer/useDebouncedState.ts#L81)
 
 A React hook that creates a debounced state value, combining React's useState with debouncing functionality.
 This hook provides both the current debounced value and methods to update it.
@@ -26,9 +29,29 @@ The hook returns a tuple containing:
 - A function to update the debounced value
 - The debouncer instance with additional control methods
 
+## State Management and Selector
+
+The hook uses TanStack Store for reactive state management via the underlying debouncer instance.
+The `selector` parameter allows you to specify which debouncer state changes will trigger a re-render,
+optimizing performance by preventing unnecessary re-renders when irrelevant state changes occur.
+
+**By default, there will be no reactive state subscriptions** and you must opt-in to state
+tracking by providing a selector function. This prevents unnecessary re-renders and gives you
+full control over when your component updates. Only when you provide a selector will the
+component re-render when the selected state values change.
+
+Available debouncer state properties:
+- `canLeadingExecute`: Whether the debouncer can execute on the leading edge
+- `executionCount`: Number of function executions that have been completed
+- `isPending`: Whether the debouncer is waiting for the timeout to trigger execution
+- `lastArgs`: The arguments from the most recent call to maybeExecute
+- `status`: Current execution status ('disabled' | 'idle' | 'pending')
+
 ## Type Parameters
 
 • **TValue**
+
+• **TSelected** = `DebouncerState`\<`Dispatch`\<`SetStateAction`\<`TValue`\>\>\>
 
 ## Parameters
 
@@ -38,25 +61,53 @@ The hook returns a tuple containing:
 
 ### options
 
-`DebouncerOptions`
+`DebouncerOptions`\<`Dispatch`\<`SetStateAction`\<`TValue`\>\>\>
+
+### selector?
+
+(`state`) => `TSelected`
 
 ## Returns
 
-readonly \[`TValue`, (...`args`) => `void`, `Debouncer`\<`Dispatch`\<`SetStateAction`\<`TValue`\>\>, \[`SetStateAction`\<`TValue`\>\]\>\]
+\[`TValue`, `Dispatch`\<`SetStateAction`\<`TValue`\>\>, [`ReactDebouncer`](../../interfaces/reactdebouncer.md)\<`Dispatch`\<`SetStateAction`\<`TValue`\>\>, `TSelected`\>\]
 
 ## Example
 
 ```tsx
-// Debounced search input
+// Default behavior - no reactive state subscriptions
 const [searchTerm, setSearchTerm, debouncer] = useDebouncedState('', {
   wait: 500 // Wait 500ms after last keystroke
 });
+
+// Opt-in to re-render when pending state changes (optimized for loading indicators)
+const [searchTerm, setSearchTerm, debouncer] = useDebouncedState(
+  '',
+  { wait: 500 },
+  (state) => ({ isPending: state.isPending })
+);
+
+// Opt-in to re-render when execution count changes (optimized for tracking executions)
+const [searchTerm, setSearchTerm, debouncer] = useDebouncedState(
+  '',
+  { wait: 500 },
+  (state) => ({ executionCount: state.executionCount })
+);
+
+// Opt-in to re-render when debouncing status changes (optimized for status display)
+const [searchTerm, setSearchTerm, debouncer] = useDebouncedState(
+  '',
+  { wait: 500 },
+  (state) => ({
+    status: state.status,
+    canLeadingExecute: state.canLeadingExecute
+  })
+);
 
 // Update value - will be debounced
 const handleChange = (e) => {
   setSearchTerm(e.target.value);
 };
 
-// Get number of times the debounced function has executed
-const executionCount = debouncer.getExecutionCount();
+// Access the selected debouncer state (will be empty object {} unless selector provided)
+const { isPending, executionCount } = debouncer.state;
 ```

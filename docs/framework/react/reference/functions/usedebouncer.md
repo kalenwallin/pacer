@@ -8,10 +8,13 @@ title: useDebouncer
 # Function: useDebouncer()
 
 ```ts
-function useDebouncer<TFn, TArgs>(fn, options): Debouncer<TFn, TArgs>
+function useDebouncer<TFn, TSelected>(
+   fn, 
+   options, 
+selector): ReactDebouncer<TFn, TSelected>
 ```
 
-Defined in: [react-pacer/src/debouncer/useDebouncer.ts:37](https://github.com/TanStack/bouncer/blob/main/packages/react-pacer/src/debouncer/useDebouncer.ts#L37)
+Defined in: [react-pacer/src/debouncer/useDebouncer.ts:102](https://github.com/TanStack/pacer/blob/main/packages/react-pacer/src/debouncer/useDebouncer.ts#L102)
 
 A React hook that creates and manages a Debouncer instance.
 
@@ -27,11 +30,29 @@ The debouncer will only execute the function after the specified wait time has e
 since the last call. If the function is called again before the wait time expires, the
 timer resets and starts waiting again.
 
+## State Management and Selector
+
+The hook uses TanStack Store for reactive state management. The `selector` parameter allows you
+to specify which state changes will trigger a re-render, optimizing performance by preventing
+unnecessary re-renders when irrelevant state changes occur.
+
+**By default, there will be no reactive state subscriptions** and you must opt-in to state
+tracking by providing a selector function. This prevents unnecessary re-renders and gives you
+full control over when your component updates. Only when you provide a selector will the
+component re-render when the selected state values change.
+
+Available state properties:
+- `canLeadingExecute`: Whether the debouncer can execute on the leading edge
+- `executionCount`: Number of function executions that have been completed
+- `isPending`: Whether the debouncer is waiting for the timeout to trigger execution
+- `lastArgs`: The arguments from the most recent call to maybeExecute
+- `status`: Current execution status ('disabled' | 'idle' | 'pending')
+
 ## Type Parameters
 
-• **TFn** *extends* (...`args`) => `any`
+• **TFn** *extends* `AnyFunction`
 
-• **TArgs** *extends* `any`[]
+• **TSelected** = \{\}
 
 ## Parameters
 
@@ -41,19 +62,48 @@ timer resets and starts waiting again.
 
 ### options
 
-`DebouncerOptions`
+`DebouncerOptions`\<`TFn`\>
+
+### selector
+
+(`state`) => `TSelected`
 
 ## Returns
 
-`Debouncer`\<`TFn`, `TArgs`\>
+[`ReactDebouncer`](../../interfaces/reactdebouncer.md)\<`TFn`, `TSelected`\>
 
 ## Example
 
 ```tsx
-// Debounce a search function to limit API calls
+// Default behavior - no reactive state subscriptions
 const searchDebouncer = useDebouncer(
   (query: string) => fetchSearchResults(query),
-  { wait: 500 } // Wait 500ms after last keystroke
+  { wait: 500 }
+);
+
+// Opt-in to re-render when isPending changes (optimized for loading states)
+const searchDebouncer = useDebouncer(
+  (query: string) => fetchSearchResults(query),
+  { wait: 500 },
+  (state) => ({ isPending: state.isPending })
+);
+
+// Opt-in to re-render when executionCount changes (optimized for tracking execution)
+const searchDebouncer = useDebouncer(
+  (query: string) => fetchSearchResults(query),
+  { wait: 500 },
+  (state) => ({ executionCount: state.executionCount })
+);
+
+// Multiple state properties - re-render when any of these change
+const searchDebouncer = useDebouncer(
+  (query: string) => fetchSearchResults(query),
+  { wait: 500 },
+  (state) => ({
+    isPending: state.isPending,
+    executionCount: state.executionCount,
+    status: state.status
+  })
 );
 
 // In an event handler
@@ -61,6 +111,6 @@ const handleChange = (e) => {
   searchDebouncer.maybeExecute(e.target.value);
 };
 
-// Get number of times the debounced function has executed
-const executionCount = searchDebouncer.getExecutionCount();
+// Access the selected state (will be empty object {} unless selector provided)
+const { isPending } = searchDebouncer.state;
 ```

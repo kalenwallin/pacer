@@ -1,5 +1,4 @@
-import { scan } from 'react-scan' // dev-tools for demo
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { useAsyncThrottler } from '@tanstack/react-pacer/async-throttler'
 
@@ -21,7 +20,6 @@ const fakeApi = async (term: string): Promise<Array<SearchResult>> => {
 function App() {
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<Array<SearchResult>>([])
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
   // The function that will become throttled
@@ -31,47 +29,47 @@ function App() {
       return
     }
 
-    // throw new Error('Test error') // you don't have to catch errors here (though you still can). The onError optional handler will catch it
-
-    if (!results.length) {
-      setIsLoading(true)
-    }
+    throw new Error('Test error') // you don't have to catch errors here (though you still can). The onError optional handler will catch it
 
     const data = await fakeApi(term)
     setResults(data)
-    setIsLoading(false)
     setError(null)
 
-    console.log(setSearchAsyncThrottler.getExecutionCount())
+    return data // this could alternatively be a void function without a return
   }
 
   // hook that gives you an async throttler instance
-  const setSearchAsyncThrottler = useAsyncThrottler(handleSearch, {
-    wait: 1000, // Wait 1 second between API calls
-    onError: (error) => {
-      // optional error handler
-      console.error('Search failed:', error)
-      setError(error as Error)
-      setResults([])
+  const setSearchAsyncThrottler = useAsyncThrottler(
+    handleSearch,
+    {
+      // leading: true, // default
+      // trailing: true, // default
+      wait: 1000, // Wait 1 second between API calls
+      onError: (error) => {
+        // optional error handler
+        console.error('Search failed:', error)
+        setError(error as Error)
+        setResults([])
+      },
+      // throwOnError: true,
     },
-  })
+    // Optional Selector function to pick the state you want to track and use
+    (state) => ({
+      successCount: state.successCount,
+      isPending: state.isPending,
+      isExecuting: state.isExecuting,
+    }),
+  )
 
   // get and name our throttled function
-  const handleSearchThrottled = setSearchAsyncThrottler.maybeExecute //
-
-  useEffect(() => {
-    console.log('mount')
-    return () => {
-      console.log('unmount')
-      setSearchAsyncThrottler.cancel() // cancel any pending async calls when the component unmounts
-    }
-  }, [])
+  const handleSearchThrottled = setSearchAsyncThrottler.maybeExecute
 
   // instant event handler that calls both the instant local state setter and the throttled function
   async function onSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
     const newTerm = e.target.value
     setSearchTerm(newTerm)
-    await handleSearchThrottled(newTerm) // optionally await if you need to
+    const result = await handleSearchThrottled(newTerm) // optionally await if you need to
+    console.log('result', result)
   }
 
   return (
@@ -79,7 +77,8 @@ function App() {
       <h1>TanStack Pacer useAsyncThrottler Example</h1>
       <div>
         <input
-          type="text"
+          autoFocus
+          type="search"
           value={searchTerm}
           onChange={onSearchChange}
           placeholder="Type to search..."
@@ -87,9 +86,12 @@ function App() {
           autoComplete="new-password"
         />
       </div>
+      <div style={{ marginTop: '10px' }}>
+        <button onClick={() => setSearchAsyncThrottler.flush()}>Flush</button>
+      </div>
       {error && <div>Error: {error.message}</div>}
       <div>
-        <p>API calls made: {setSearchAsyncThrottler.getExecutionCount()}</p>
+        <p>API calls made: {setSearchAsyncThrottler.state.successCount}</p>
         {results.length > 0 && (
           <ul>
             {results.map((item) => (
@@ -97,7 +99,14 @@ function App() {
             ))}
           </ul>
         )}
-        {isLoading && <p>Loading...</p>}
+        {setSearchAsyncThrottler.state.isPending ? (
+          <p>Pending...</p>
+        ) : setSearchAsyncThrottler.state.isExecuting ? (
+          <p>Executing...</p>
+        ) : null}
+        <pre style={{ marginTop: '20px' }}>
+          {JSON.stringify(setSearchAsyncThrottler.store.state, null, 2)}
+        </pre>
       </div>
     </div>
   )
@@ -110,10 +119,8 @@ root.render(<App />)
 
 // demo unmounting and cancellation
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+  if (e.shiftKey && e.key === 'Enter') {
     mounted = !mounted
     root.render(mounted ? <App /> : null)
   }
 })
-
-scan() // dev-tools for demo

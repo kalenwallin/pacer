@@ -8,16 +8,13 @@ title: useRateLimitedState
 # Function: useRateLimitedState()
 
 ```ts
-function useRateLimitedState<TValue>(value, options): readonly [TValue, (...args) => boolean, {
-  getExecutionCount: () => number;
-  getRejectionCount: () => number;
-  getRemainingInWindow: () => number;
-  maybeExecute: (...args) => boolean;
-  reset: () => void;
- }]
+function useRateLimitedState<TValue, TSelected>(
+   value, 
+   options, 
+   selector?): [TValue, Dispatch<SetStateAction<TValue>>, ReactRateLimiter<Dispatch<SetStateAction<TValue>>, TSelected>]
 ```
 
-Defined in: [react-pacer/src/rate-limiter/useRateLimitedState.ts:56](https://github.com/TanStack/bouncer/blob/main/packages/react-pacer/src/rate-limiter/useRateLimitedState.ts#L56)
+Defined in: [react-pacer/src/rate-limiter/useRateLimitedState.ts:107](https://github.com/TanStack/pacer/blob/main/packages/react-pacer/src/rate-limiter/useRateLimitedState.ts#L107)
 
 A React hook that creates a rate-limited state value that enforces a hard limit on state updates within a time window.
 This hook combines React's useState with rate limiting functionality to provide controlled state updates.
@@ -25,6 +22,12 @@ This hook combines React's useState with rate limiting functionality to provide 
 Rate limiting is a simple "hard limit" approach - it allows all updates until the limit is reached, then blocks
 subsequent updates until the window resets. Unlike throttling or debouncing, it does not attempt to space out
 or intelligently collapse updates. This can lead to bursts of rapid updates followed by periods of no updates.
+
+The rate limiter supports two types of windows:
+- 'fixed': A strict window that resets after the window period. All updates within the window count
+  towards the limit, and the window resets completely after the period.
+- 'sliding': A rolling window that allows updates as old ones expire. This provides a more
+  consistent rate of updates over time.
 
 For smoother update patterns, consider:
 - useThrottledState: When you want consistent spacing between updates (e.g. UI changes)
@@ -40,9 +43,27 @@ The hook returns a tuple containing:
 For more direct control over rate limiting without state management,
 consider using the lower-level useRateLimiter hook instead.
 
+## State Management and Selector
+
+The hook uses TanStack Store for reactive state management via the underlying rate limiter instance.
+The `selector` parameter allows you to specify which rate limiter state changes will trigger a re-render,
+optimizing performance by preventing unnecessary re-renders when irrelevant state changes occur.
+
+**By default, there will be no reactive state subscriptions** and you must opt-in to state
+tracking by providing a selector function. This prevents unnecessary re-renders and gives you
+full control over when your component updates. Only when you provide a selector will the
+component re-render when the selected state values change.
+
+Available rate limiter state properties:
+- `executionCount`: Number of function executions that have been completed
+- `executionTimes`: Array of timestamps when executions occurred for rate limiting calculations
+- `rejectionCount`: Number of function executions that have been rejected due to rate limiting
+
 ## Type Parameters
 
 • **TValue**
+
+• **TSelected** = `RateLimiterState`
 
 ## Parameters
 
@@ -52,33 +73,54 @@ consider using the lower-level useRateLimiter hook instead.
 
 ### options
 
-`RateLimiterOptions`
+`RateLimiterOptions`\<`Dispatch`\<`SetStateAction`\<`TValue`\>\>\>
+
+### selector?
+
+(`state`) => `TSelected`
 
 ## Returns
 
-readonly \[`TValue`, (...`args`) => `boolean`, \{
-  `getExecutionCount`: () => `number`;
-  `getRejectionCount`: () => `number`;
-  `getRemainingInWindow`: () => `number`;
-  `maybeExecute`: (...`args`) => `boolean`;
-  `reset`: () => `void`;
- \}\]
+\[`TValue`, `Dispatch`\<`SetStateAction`\<`TValue`\>\>, [`ReactRateLimiter`](../../interfaces/reactratelimiter.md)\<`Dispatch`\<`SetStateAction`\<`TValue`\>\>, `TSelected`\>\]
 
 ## Example
 
 ```tsx
-// Basic rate limiting - update state at most 5 times per minute
+// Default behavior - no reactive state subscriptions
 const [value, setValue, rateLimiter] = useRateLimitedState(0, {
   limit: 5,
-  window: 60000
+  window: 60000,
+  windowType: 'sliding'
 });
 
-// With rejection callback
+// Opt-in to re-render when execution count changes (optimized for tracking successful updates)
+const [value, setValue, rateLimiter] = useRateLimitedState(
+  0,
+  { limit: 5, window: 60000, windowType: 'sliding' },
+  (state) => ({ executionCount: state.executionCount })
+);
+
+// Opt-in to re-render when rejection count changes (optimized for tracking rate limit violations)
+const [value, setValue, rateLimiter] = useRateLimitedState(
+  0,
+  { limit: 5, window: 60000, windowType: 'sliding' },
+  (state) => ({ rejectionCount: state.rejectionCount })
+);
+
+// Opt-in to re-render when execution times change (optimized for window calculations)
+const [value, setValue, rateLimiter] = useRateLimitedState(
+  0,
+  { limit: 5, window: 60000, windowType: 'sliding' },
+  (state) => ({ executionTimes: state.executionTimes })
+);
+
+// With rejection callback and fixed window
 const [value, setValue] = useRateLimitedState(0, {
   limit: 3,
   window: 5000,
-  onReject: ({ msUntilNextWindow }) => {
-    alert(`Rate limit reached. Try again in ${msUntilNextWindow}ms`);
+  windowType: 'fixed',
+  onReject: (rateLimiter) => {
+    alert(`Rate limit reached. Try again in ${rateLimiter.getMsUntilNextWindow()}ms`);
   }
 });
 
@@ -91,4 +133,7 @@ const handleSubmit = () => {
     showRateLimitWarning();
   }
 };
+
+// Access the selected rate limiter state (will be empty object {} unless selector provided)
+const { executionCount, rejectionCount } = rateLimiter.state;
 ```

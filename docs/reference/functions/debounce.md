@@ -8,20 +8,31 @@ title: debounce
 # Function: debounce()
 
 ```ts
-function debounce<TFn>(fn, options): (...args) => void
+function debounce<TFn>(fn, initialOptions): (...args) => void
 ```
 
-Defined in: [debouncer.ts:125](https://github.com/TanStack/bouncer/blob/main/packages/pacer/src/debouncer.ts#L125)
+Defined in: [debouncer.ts:312](https://github.com/TanStack/pacer/blob/main/packages/pacer/src/debouncer.ts#L312)
 
 Creates a debounced function that delays invoking the provided function until after a specified wait time.
 Multiple calls during the wait period will cancel previous pending invocations and reset the timer.
 
+This the the simple function wrapper implementation pulled from the Debouncer class. If you need
+more control over the debouncing behavior, use the Debouncer class directly.
+
 If leading option is true, the function will execute immediately on the first call, then wait the delay
 before allowing another execution.
 
+State Management:
+- Uses TanStack Store for reactive state management
+- Use `initialState` to provide initial state values when creating the debouncer
+- Use `onExecute` callback to react to function execution and implement custom logic
+- The state includes canLeadingExecute, execution count, and isPending status
+- State can be accessed via the underlying Debouncer instance's `store.state` property
+- When using framework adapters (React/Solid), state is accessed from the hook's state property
+
 ## Type Parameters
 
-• **TFn** *extends* (...`args`) => `any`
+• **TFn** *extends* [`AnyFunction`](../../type-aliases/anyfunction.md)
 
 ## Parameters
 
@@ -29,22 +40,19 @@ before allowing another execution.
 
 `TFn`
 
-### options
+### initialOptions
 
-[`DebouncerOptions`](../interfaces/debounceroptions.md)
+[`DebouncerOptions`](../../interfaces/debounceroptions.md)\<`TFn`\>
 
 ## Returns
 
 `Function`
 
-Attempts to execute the debounced function
-If a call is already in progress, it will be queued
-
 ### Parameters
 
 #### args
 
-...`Parameters`
+...`Parameters`\<`TFn`\>
 
 ### Returns
 

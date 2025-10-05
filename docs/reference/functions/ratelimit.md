@@ -8,10 +8,10 @@ title: rateLimit
 # Function: rateLimit()
 
 ```ts
-function rateLimit<TFn>(fn, options): (...args) => boolean
+function rateLimit<TFn>(fn, initialOptions): (...args) => boolean
 ```
 
-Defined in: [rate-limiter.ts:203](https://github.com/TanStack/bouncer/blob/main/packages/pacer/src/rate-limiter.ts#L203)
+Defined in: [rate-limiter.ts:404](https://github.com/TanStack/pacer/blob/main/packages/pacer/src/rate-limiter.ts#L404)
 
 Creates a rate-limited function that will execute the provided function up to a maximum number of times within a time window.
 
@@ -20,12 +20,27 @@ Note that rate limiting is a simpler form of execution control compared to throt
 - A throttler ensures even spacing between executions, which can be better for consistent performance
 - A debouncer collapses multiple calls into one, which is better for handling bursts of events
 
+The rate limiter supports two types of windows:
+- 'fixed': A strict window that resets after the window period. All executions within the window count
+  towards the limit, and the window resets completely after the period.
+- 'sliding': A rolling window that allows executions as old ones expire. This provides a more
+  consistent rate of execution over time.
+
+State Management:
+- Uses TanStack Store for reactive state management
+- Use `initialState` to provide initial state values when creating the rate limiter
+- Use `onExecute` callback to react to function execution and implement custom logic
+- Use `onReject` callback to react to executions being rejected when rate limit is exceeded
+- The state includes execution count, execution times, and rejection count
+- State can be accessed via the underlying RateLimiter instance's `store.state` property
+- When using framework adapters (React/Solid), state is accessed from the hook's state property
+
 Consider using throttle() or debounce() if you need more intelligent execution control. Use rate limiting when you specifically
 need to enforce a hard limit on the number of executions within a time period.
 
 ## Type Parameters
 
-• **TFn** *extends* (...`args`) => `any`
+• **TFn** *extends* [`AnyFunction`](../../type-aliases/anyfunction.md)
 
 ## Parameters
 
@@ -33,9 +48,9 @@ need to enforce a hard limit on the number of executions within a time period.
 
 `TFn`
 
-### options
+### initialOptions
 
-[`RateLimiterOptions`](../interfaces/ratelimiteroptions.md)
+[`RateLimiterOptions`](../../interfaces/ratelimiteroptions.md)\<`TFn`\>
 
 ## Returns
 
@@ -48,7 +63,7 @@ Will reject execution if the number of calls in the current window exceeds the l
 
 #### args
 
-...`Parameters`
+...`Parameters`\<`TFn`\>
 
 ### Returns
 
@@ -69,12 +84,13 @@ rateLimiter.maybeExecute('arg1', 'arg2'); // false
 ## Example
 
 ```ts
-// Rate limit to 5 calls per minute
+// Rate limit to 5 calls per minute with a sliding window
 const rateLimited = rateLimit(makeApiCall, {
   limit: 5,
   window: 60000,
-  onReject: ({ msUntilNextWindow }) => {
-    console.log(`Rate limit exceeded. Try again in ${msUntilNextWindow}ms`);
+  windowType: 'sliding',
+  onReject: (rateLimiter) => {
+    console.log(`Rate limit exceeded. Try again in ${rateLimiter.getMsUntilNextWindow()}ms`);
   }
 });
 
